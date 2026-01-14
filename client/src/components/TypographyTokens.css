@@ -1,0 +1,126 @@
+.typography-tokens {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.typography-section h3 {
+  color: var(--text-dark);
+  font-size: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.font-families,
+.font-sizes,
+.font-weights,
+.line-heights {
+  display: grid;
+  gap: 1rem;
+}
+
+.font-families {
+  grid-template-columns: 1fr;
+}
+
+.font-sizes {
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.font-weights,
+.line-heights {
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+
+.font-family-card,
+.font-size-card,
+.font-weight-card,
+.line-height-card {
+  padding: 1.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: #f9fafb;
+  transition: all 0.2s;
+}
+
+.font-family-card:hover,
+.font-size-card:hover,
+.font-weight-card:hover,
+.line-height-card:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-2px);
+}
+
+.font-preview {
+  color: var(--text-dark);
+  font-size: 1.125rem;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background: white;
+  border-radius: var(--radius-sm);
+}
+
+.size-preview {
+  color: var(--primary-color);
+  font-weight: 600;
+  text-align: center;
+  margin-bottom: 0.75rem;
+  line-height: 1;
+}
+
+.weight-preview {
+  color: var(--text-dark);
+  font-size: 1rem;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: var(--radius-sm);
+}
+
+.line-height-preview {
+  font-size: 0.875rem;
+  color: var(--text-dark);
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: var(--radius-sm);
+}
+
+.line-height-preview p {
+  margin: 0;
+}
+
+.font-info,
+.size-info,
+.weight-info,
+.line-height-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.font-name,
+.size-name,
+.weight-name,
+.line-height-name {
+  color: var(--text-dark);
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+.font-value,
+.size-value,
+.weight-value,
+.line-height-value {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  font-family: monospace;
+}
+
+@media (max-width: 768px) {
+  .font-sizes,
+  .font-weights,
+  .line-heights {
+    grid-template-columns: 1fr;
+  }
+}
