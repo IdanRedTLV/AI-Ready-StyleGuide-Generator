@@ -18,7 +18,7 @@ class AnalysisService {
 
       // Analyze with Claude Vision
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20241022',
+        model: 'claude-3-5-sonnet-20240620',
         max_tokens: 4096,
         messages: [
           {
