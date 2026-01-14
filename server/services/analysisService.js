@@ -1,40 +1,25 @@
 const fs = require('fs').promises;
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
+const OpenAI = require('openai');
 
 class AnalysisService {
   constructor() {
     this.anthropic = new Anthropic({
       apiKey: process.env.ANTHROPIC_API_KEY
     });
+    this.openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY
+    });
   }
 
   async analyzeScreenshot(imagePath) {
-    try {
-      // Read image and convert to base64
-      const imageBuffer = await fs.readFile(imagePath);
-      const base64Image = imageBuffer.toString('base64');
-      const mimeType = this.getMimeType(imagePath);
+    // Read image and convert to base64
+    const imageBuffer = await fs.readFile(imagePath);
+    const base64Image = imageBuffer.toString('base64');
+    const mimeType = this.getMimeType(imagePath);
 
-      // Analyze with Claude Vision
-      const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20240620',
-        max_tokens: 4096,
-        messages: [
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'image',
-                source: {
-                  type: 'base64',
-                  media_type: mimeType,
-                  data: base64Image
-                }
-              },
-              {
-                type: 'text',
-                text: `Analyze this UI screenshot and extract design system information in a machine-readable format.
+    const analysisPrompt = `Analyze this UI screenshot and extract design system information in a machine-readable format.
 
 Identify and categorize:
 1. **UI Components**: buttons, inputs, cards, navigation, modals, dropdowns, etc.
@@ -54,21 +39,75 @@ For each component, provide:
 - Position and dimensions
 - Hierarchy and relationships
 
-Return the analysis as a structured JSON object with clear categorization for AI consumption.`
+Return the analysis as a structured JSON object with clear categorization for AI consumption.`;
+
+    // Try Anthropic first
+    try {
+      console.log('🤖 Trying Anthropic Claude...');
+      const response = await this.anthropic.messages.create({
+        model: 'claude-3-5-sonnet-20240620',
+        max_tokens: 4096,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: mimeType,
+                  data: base64Image
+                }
+              },
+              {
+                type: 'text',
+                text: analysisPrompt
               }
             ]
           }
         ]
       });
 
-      // Parse the response
       const analysisText = response.content[0].text;
       const analysis = this.parseAnalysisResponse(analysisText);
-
+      console.log('✅ Anthropic analysis successful');
       return analysis;
-    } catch (error) {
-      console.error('Screenshot analysis error:', error);
-      throw new Error(`Failed to analyze screenshot: ${error.message}`);
+    } catch (anthropicError) {
+      console.warn('⚠️  Anthropic failed:', anthropicError.message);
+      console.log('🔄 Falling back to OpenAI GPT-4 Vision...');
+
+      // Fallback to OpenAI
+      try {
+        const response = await this.openai.chat.completions.create({
+          model: 'gpt-4-vision-preview',
+          max_tokens: 4096,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'image_url',
+                  image_url: {
+                    url: `data:${mimeType};base64,${base64Image}`
+                  }
+                },
+                {
+                  type: 'text',
+                  text: analysisPrompt
+                }
+              ]
+            }
+          ]
+        });
+
+        const analysisText = response.choices[0].message.content;
+        const analysis = this.parseAnalysisResponse(analysisText);
+        console.log('✅ OpenAI analysis successful');
+        return analysis;
+      } catch (openaiError) {
+        console.error('❌ OpenAI also failed:', openaiError.message);
+        throw new Error(`Failed to analyze screenshot with both providers. Anthropic: ${anthropicError.message}, OpenAI: ${openaiError.message}`);
+      }
     }
   }
 
