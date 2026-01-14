@@ -45,7 +45,7 @@ Return the analysis as a structured JSON object with clear categorization for AI
     try {
       console.log('🤖 Trying Anthropic Claude...');
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-5-sonnet-20240620',
+        model: 'claude-3-opus-20240229',
         max_tokens: 4096,
         messages: [
           {
@@ -79,7 +79,7 @@ Return the analysis as a structured JSON object with clear categorization for AI
       // Fallback to OpenAI
       try {
         const response = await this.openai.chat.completions.create({
-          model: 'gpt-4-vision-preview',
+          model: 'gpt-4o',
           max_tokens: 4096,
           messages: [
             {
@@ -252,6 +252,12 @@ Return the analysis as a structured JSON object with clear categorization for AI
     // Consolidate components from all analyses
     for (const result of analysisResults) {
       const components = result.analysis.components || [];
+
+      // Ensure components is an array
+      if (!Array.isArray(components)) {
+        console.warn('Components is not an array, skipping:', typeof components);
+        continue;
+      }
 
       for (const component of components) {
         const key = component.semanticName || component.type;
