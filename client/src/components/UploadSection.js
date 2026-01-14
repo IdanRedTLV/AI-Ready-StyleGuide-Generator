@@ -58,14 +58,14 @@ function UploadSection({ onAnalysisComplete, onAnalysisStart, onError }) {
     });
 
     try {
-      const response = await axios.post('/api/analysis', formData, {
+      const response = await axios.post('http://localhost:5001/api/analysis', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
       });
 
       if (response.data.success) {
-        const figmaResponse = await axios.post('/api/figma/generate', {
+        const figmaResponse = await axios.post('http://localhost:5001/api/figma/generate', {
           designTokens: response.data.designTokens,
           componentLibrary: response.data.componentLibrary,
           projectName: 'AI-Generated Style Guide'
