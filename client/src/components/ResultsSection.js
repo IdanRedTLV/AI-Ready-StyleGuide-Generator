@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import './ResultsSection.css';
 import ColorTokens from './ColorTokens';
 import TypographyTokens from './TypographyTokens';
