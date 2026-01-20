@@ -106,6 +106,16 @@ function UploadSection({ onAnalysisComplete, onAnalysisStart, onError }) {
         <p className="figma-url-hint">
           Provide a Figma frame URL with node-id parameter, or upload screenshots below
         </p>
+        {figmaUrl && (
+          <div className="figma-url-actions">
+            <button
+              className="btn btn-primary btn-analyze"
+              onClick={handleAnalyze}
+            >
+              Analyze Figma Frame
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="divider">

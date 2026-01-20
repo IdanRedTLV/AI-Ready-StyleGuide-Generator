@@ -45,6 +45,17 @@
   margin: 0;
 }
 
+.figma-url-actions {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.figma-url-actions .btn-analyze {
+  font-size: 1.0625rem;
+  padding: 0.875rem 2rem;
+}
+
 .divider {
   display: flex;
   align-items: center;

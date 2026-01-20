@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import './App.css';
 import UploadSection from './components/UploadSection';
 import ResultsSection from './components/ResultsSection';
-import Header from './components/Header';
 import LoadingSpinner from './components/LoadingSpinner';
 
 function App() {
@@ -35,8 +34,6 @@ function App() {
 
   return (
     <div className="App">
-      <Header />
-
       <main className="container">
         {!results && !loading && (
           <div className="intro-section">
