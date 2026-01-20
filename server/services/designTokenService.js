@@ -42,7 +42,7 @@ class DesignTokenService {
     // Extract colors from all analyses
     const allColors = [];
     for (const result of analysisResults) {
-      if (result.analysis.colors) {
+      if (result.analysis.colors && Array.isArray(result.analysis.colors)) {
         allColors.push(...result.analysis.colors);
       }
 
