@@ -65,6 +65,7 @@ class FigmaService {
 
     try {
       console.log(`📸 Fetching Figma screenshot for file: ${fileKey}, node: ${nodeId}`);
+      console.log(`🔑 Using token: ${this.apiKey.substring(0, 20)}...`);
 
       // Get image URL from Figma API
       const imageUrlResponse = await axios.get(
