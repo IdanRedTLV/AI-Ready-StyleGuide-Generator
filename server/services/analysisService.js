@@ -45,7 +45,7 @@ Return the analysis as a structured JSON object with clear categorization for AI
     try {
       console.log('🤖 Trying Anthropic Claude...');
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-opus-20240229',
+        model: 'claude-3-sonnet-20240229',
         max_tokens: 4096,
         messages: [
           {
