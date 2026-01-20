@@ -5,6 +5,7 @@ import './UploadSection.css';
 function UploadSection({ onAnalysisComplete, onAnalysisStart, onError }) {
   const [files, setFiles] = useState([]);
   const [dragActive, setDragActive] = useState(false);
+  const [figmaUrl, setFigmaUrl] = useState('');
 
   const handleDrag = useCallback((e) => {
     e.preventDefault();
@@ -45,8 +46,8 @@ function UploadSection({ onAnalysisComplete, onAnalysisStart, onError }) {
   };
 
   const handleAnalyze = async () => {
-    if (files.length === 0) {
-      onError('Please upload at least one screenshot');
+    if (files.length === 0 && !figmaUrl) {
+      onError('Please upload at least one screenshot or provide a Figma URL');
       return;
     }
 
@@ -56,6 +57,11 @@ function UploadSection({ onAnalysisComplete, onAnalysisStart, onError }) {
     files.forEach(file => {
       formData.append('screenshots', file);
     });
+
+    // Add Figma URL if provided
+    if (figmaUrl) {
+      formData.append('figmaUrl', figmaUrl);
+    }
 
     try {
       const response = await axios.post('http://localhost:5001/api/analysis', formData, {
@@ -86,6 +92,26 @@ function UploadSection({ onAnalysisComplete, onAnalysisStart, onError }) {
 
   return (
     <div className="upload-section">
+      <div className="figma-url-section">
+        <h3>🔗 Analyze from Figma</h3>
+        <div className="figma-url-input-wrapper">
+          <input
+            type="text"
+            className="figma-url-input"
+            placeholder="Paste Figma URL (e.g., https://www.figma.com/design/...?node-id=1-2)"
+            value={figmaUrl}
+            onChange={(e) => setFigmaUrl(e.target.value)}
+          />
+        </div>
+        <p className="figma-url-hint">
+          Provide a Figma frame URL with node-id parameter, or upload screenshots below
+        </p>
+      </div>
+
+      <div className="divider">
+        <span>OR</span>
+      </div>
+
       <div
         className={`dropzone ${dragActive ? 'active' : ''} ${files.length > 0 ? 'has-files' : ''}`}
         onDragEnter={handleDrag}

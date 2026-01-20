@@ -1,9 +1,204 @@
 const axios = require('axios');
+const sharp = require('sharp');
 
 class FigmaService {
   constructor() {
     this.apiKey = process.env.FIGMA_ACCESS_TOKEN;
     this.baseURL = 'https://api.figma.com/v1';
+    if (!this.apiKey) {
+      console.warn('FIGMA_ACCESS_TOKEN not configured');
+    }
+  }
+
+  /**
+   * Parse a Figma URL to extract file key and node ID
+   * @param {string} url - Figma URL (e.g., https://www.figma.com/design/ABC123?node-id=1-2)
+   * @returns {{fileKey: string, nodeId: string|null, isValid: boolean}}
+   */
+  parseFigmaUrl(url) {
+    try {
+      const normalized = url.trim().toLowerCase();
+
+      // Check if it's a valid Figma URL
+      if (!normalized.includes('figma.com')) {
+        return { fileKey: '', nodeId: null, isValid: false };
+      }
+
+      // Extract file key from design URL pattern
+      const designMatch = normalized.match(/figma\.com\/design\/([a-zA-Z0-9]+)/);
+      const fileMatch = normalized.match(/figma\.com\/file\/([a-zA-Z0-9]+)/);
+
+      const fileKey = designMatch ? designMatch[1] : (fileMatch ? fileMatch[1] : '');
+
+      if (!fileKey) {
+        return { fileKey: '', nodeId: null, isValid: false };
+      }
+
+      // Extract node-id from URL parameters
+      const urlObj = new URL(url);
+      const nodeIdParam = urlObj.searchParams.get('node-id');
+
+      // Convert node-id format from "1-2" to "1:2" (Figma API format)
+      const nodeId = nodeIdParam ? nodeIdParam.replace(/-/g, ':') : null;
+
+      return {
+        fileKey,
+        nodeId,
+        isValid: true
+      };
+    } catch (error) {
+      console.error('Error parsing Figma URL:', error);
+      return { fileKey: '', nodeId: null, isValid: false };
+    }
+  }
+
+  /**
+   * Fetch a screenshot from Figma API
+   * @param {string} fileKey - Figma file key
+   * @param {string} nodeId - Node ID in format "1:2"
+   * @returns {Promise<{image: Buffer, mimeType: string}|null>}
+   */
+  async fetchFigmaScreenshot(fileKey, nodeId) {
+    if (!this.apiKey) {
+      throw new Error('Figma access token not configured');
+    }
+
+    try {
+      console.log(`📸 Fetching Figma screenshot for file: ${fileKey}, node: ${nodeId}`);
+
+      // Get image URL from Figma API
+      const imageUrlResponse = await axios.get(
+        `${this.baseURL}/images/${fileKey}`,
+        {
+          params: {
+            ids: nodeId,
+            format: 'png',
+            scale: 2
+          },
+          headers: {
+            'X-Figma-Token': this.apiKey
+          }
+        }
+      );
+
+      const imageUrl = imageUrlResponse.data.images?.[nodeId];
+
+      if (!imageUrl) {
+        console.error('No image URL returned from Figma API');
+        return null;
+      }
+
+      // Fetch the actual image
+      const imageResponse = await axios.get(imageUrl, {
+        responseType: 'arraybuffer'
+      });
+
+      const imageBuffer = Buffer.from(imageResponse.data);
+      console.log(`✅ Figma screenshot fetched: ${(imageBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+
+      return {
+        image: imageBuffer,
+        mimeType: 'image/png'
+      };
+    } catch (error) {
+      console.error('Error fetching Figma screenshot:', error.message);
+      if (error.response) {
+        console.error('Figma API error:', error.response.status, error.response.data);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Compress an image to fit within API size limits
+   * @param {Buffer} imageBuffer - Image buffer
+   * @param {string} mimeType - MIME type
+   * @param {number} maxSizeMB - Maximum size in MB (default: 4.5)
+   * @returns {Promise<{buffer: Buffer, mimeType: string}>}
+   */
+  async compressImage(imageBuffer, mimeType, maxSizeMB = 4.5) {
+    const maxSizeBytes = maxSizeMB * 1024 * 1024;
+
+    // If already under limit, return as-is
+    if (imageBuffer.length <= maxSizeBytes) {
+      console.log(`✅ Image size OK: ${(imageBuffer.length / 1024 / 1024).toFixed(2)} MB`);
+      return { buffer: imageBuffer, mimeType };
+    }
+
+    console.log(`🔄 Compressing image from ${(imageBuffer.length / 1024 / 1024).toFixed(2)} MB...`);
+
+    try {
+      let quality = 90;
+      let compressed = imageBuffer;
+      let attempts = 0;
+      const maxAttempts = 5;
+
+      while (compressed.length > maxSizeBytes && attempts < maxAttempts) {
+        compressed = await sharp(imageBuffer)
+          .png({ quality, compressionLevel: 9 })
+          .toBuffer();
+
+        console.log(`  Attempt ${attempts + 1}: ${(compressed.length / 1024 / 1024).toFixed(2)} MB (quality: ${quality})`);
+
+        quality -= 15;
+        attempts++;
+      }
+
+      // If still too large, resize
+      if (compressed.length > maxSizeBytes) {
+        console.log('  Resizing image to reduce size further...');
+        const metadata = await sharp(imageBuffer).metadata();
+        const scale = Math.sqrt(maxSizeBytes / compressed.length) * 0.9;
+        const newWidth = Math.floor(metadata.width * scale);
+
+        compressed = await sharp(imageBuffer)
+          .resize(newWidth)
+          .png({ quality: 85, compressionLevel: 9 })
+          .toBuffer();
+      }
+
+      console.log(`✅ Compression complete: ${(compressed.length / 1024 / 1024).toFixed(2)} MB`);
+
+      return {
+        buffer: compressed,
+        mimeType: 'image/png'
+      };
+    } catch (error) {
+      console.error('Error compressing image:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Fetch and prepare Figma screenshot for analysis
+   * @param {string} figmaUrl - Full Figma URL
+   * @returns {Promise<{buffer: Buffer, mimeType: string, nodeId: string}>}
+   */
+  async fetchAndPrepareScreenshot(figmaUrl) {
+    const parsed = this.parseFigmaUrl(figmaUrl);
+
+    if (!parsed.isValid) {
+      throw new Error('Invalid Figma URL');
+    }
+
+    if (!parsed.nodeId) {
+      throw new Error('Figma URL must include a node-id parameter (e.g., ?node-id=1-2)');
+    }
+
+    const screenshot = await this.fetchFigmaScreenshot(parsed.fileKey, parsed.nodeId);
+
+    if (!screenshot) {
+      throw new Error('Failed to fetch screenshot from Figma');
+    }
+
+    // Compress if needed
+    const compressed = await this.compressImage(screenshot.image, screenshot.mimeType);
+
+    return {
+      buffer: compressed.buffer,
+      mimeType: compressed.mimeType,
+      nodeId: parsed.nodeId
+    };
   }
 
   generateStyleGuide({ designTokens, componentLibrary, projectName }) {

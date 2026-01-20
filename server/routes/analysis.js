@@ -2,27 +2,81 @@ const express = require('express');
 const router = express.Router();
 const analysisService = require('../services/analysisService');
 const designTokenService = require('../services/designTokenService');
+const figmaService = require('../services/figmaService');
+const fs = require('fs').promises;
+const path = require('path');
 
 // Analyze uploaded screenshots
 router.post('/', async (req, res) => {
   try {
-    if (!req.files || req.files.length === 0) {
-      return res.status(400).json({ error: 'No files uploaded' });
+    const uploadedFiles = req.files || [];
+    const figmaUrl = req.body.figmaUrl;
+
+    // Check if we have either uploaded files or a Figma URL
+    if (uploadedFiles.length === 0 && !figmaUrl) {
+      return res.status(400).json({ error: 'No files uploaded or Figma URL provided' });
     }
 
-    console.log(`📸 Analyzing ${req.files.length} screenshot(s)...`);
+    // Handle Figma URL if provided
+    let figmaFile = null;
+    if (figmaUrl) {
+      try {
+        console.log(`🔗 Processing Figma URL: ${figmaUrl}`);
+        const figmaScreenshot = await figmaService.fetchAndPrepareScreenshot(figmaUrl);
+
+        // Save to temporary file for analysis
+        const tempDir = path.join(__dirname, '../../uploads');
+        const tempFileName = `figma-${Date.now()}.png`;
+        const tempFilePath = path.join(tempDir, tempFileName);
+
+        await fs.writeFile(tempFilePath, figmaScreenshot.buffer);
+
+        figmaFile = {
+          originalname: `figma-frame-${figmaScreenshot.nodeId}.png`,
+          path: tempFilePath,
+          fromFigma: true
+        };
+
+        console.log(`✅ Figma screenshot saved: ${tempFileName}`);
+      } catch (figmaError) {
+        console.error('Figma processing error:', figmaError);
+        return res.status(400).json({
+          error: 'Failed to fetch Figma screenshot',
+          details: figmaError.message
+        });
+      }
+    }
+
+    // Combine uploaded files and Figma file
+    const allFiles = [...uploadedFiles];
+    if (figmaFile) {
+      allFiles.push(figmaFile);
+    }
+
+    console.log(`📸 Analyzing ${allFiles.length} screenshot(s)...`);
 
     // Analyze each screenshot
     const analysisResults = [];
-    for (const file of req.files) {
+    for (const file of allFiles) {
       console.log(`🔍 Processing: ${file.originalname}`);
 
       const analysis = await analysisService.analyzeScreenshot(file.path);
       analysisResults.push({
         filename: file.originalname,
         path: file.path,
-        analysis
+        analysis,
+        fromFigma: file.fromFigma || false
       });
+    }
+
+    // Clean up Figma temporary file if it exists
+    if (figmaFile) {
+      try {
+        await fs.unlink(figmaFile.path);
+        console.log('🧹 Cleaned up Figma temporary file');
+      } catch (cleanupError) {
+        console.warn('Failed to clean up temporary Figma file:', cleanupError.message);
+      }
     }
 
     // Consolidate design tokens from all screenshots
@@ -35,13 +89,15 @@ router.post('/', async (req, res) => {
 
     res.json({
       success: true,
-      screenshotsAnalyzed: req.files.length,
+      screenshotsAnalyzed: allFiles.length,
+      figmaUrlAnalyzed: !!figmaUrl,
       designTokens,
       componentLibrary,
       analysisResults: analysisResults.map(r => ({
         filename: r.filename,
         components: r.analysis.components,
-        summary: r.analysis.summary
+        summary: r.analysis.summary,
+        fromFigma: r.fromFigma
       }))
     });
 
