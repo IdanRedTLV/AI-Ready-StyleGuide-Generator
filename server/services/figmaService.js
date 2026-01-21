@@ -17,16 +17,17 @@ class FigmaService {
    */
   parseFigmaUrl(url) {
     try {
-      const normalized = url.trim().toLowerCase();
+      const trimmed = url.trim();
+      const normalized = trimmed.toLowerCase();
 
       // Check if it's a valid Figma URL
       if (!normalized.includes('figma.com')) {
         return { fileKey: '', nodeId: null, isValid: false };
       }
 
-      // Extract file key from design URL pattern
-      const designMatch = normalized.match(/figma\.com\/design\/([a-zA-Z0-9]+)/);
-      const fileMatch = normalized.match(/figma\.com\/file\/([a-zA-Z0-9]+)/);
+      // Extract file key from design URL pattern (preserve original case!)
+      const designMatch = trimmed.match(/figma\.com\/design\/([a-zA-Z0-9]+)/i);
+      const fileMatch = trimmed.match(/figma\.com\/file\/([a-zA-Z0-9]+)/i);
 
       const fileKey = designMatch ? designMatch[1] : (fileMatch ? fileMatch[1] : '');
 
@@ -35,7 +36,7 @@ class FigmaService {
       }
 
       // Extract node-id from URL parameters
-      const urlObj = new URL(url);
+      const urlObj = new URL(trimmed);
       const nodeIdParam = urlObj.searchParams.get('node-id');
 
       // Convert node-id format from "1-2" to "1:2" (Figma API format)
