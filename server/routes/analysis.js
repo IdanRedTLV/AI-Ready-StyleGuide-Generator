@@ -17,34 +17,70 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'No files uploaded or Figma URL provided' });
     }
 
-    // Handle Figma URL if provided
-    let figmaFile = null;
-    let figmaDesignTokens = null;
-    let figmaNodeData = null;
-
+    // Handle Figma URL - use real Figma data, skip AI analysis
     if (figmaUrl) {
       try {
         console.log(`🔗 Processing Figma URL: ${figmaUrl}`);
         const figmaData = await figmaService.fetchCompleteFrameData(figmaUrl);
 
-        // Save screenshot to temporary file for AI analysis
-        const tempDir = path.join(__dirname, '../../uploads');
-        const tempFileName = `figma-${Date.now()}.png`;
-        const tempFilePath = path.join(tempDir, tempFileName);
+        console.log(`✅ Fetched real Figma design tokens`);
 
-        await fs.writeFile(tempFilePath, figmaData.screenshot.buffer);
-
-        figmaFile = {
-          originalname: `figma-frame-${figmaData.nodeId}.png`,
-          path: tempFilePath,
-          fromFigma: true
+        // Format Figma design tokens to match expected structure
+        const designTokens = {
+          colors: {
+            primary: figmaData.designTokens.colors.slice(0, 3).map((c, i) => ({
+              name: `primary-${i + 1}`,
+              value: c.color,
+              hsl: `hsl(0, 0%, ${Math.round((1 - c.opacity) * 100)}%)`,
+              opacity: c.opacity
+            })),
+            secondary: [],
+            neutral: figmaData.designTokens.colors.slice(3).map((c, i) => ({
+              name: `neutral-${i + 1}`,
+              value: c.color,
+              opacity: c.opacity
+            }))
+          },
+          typography: {
+            fontFamilies: figmaData.designTokens.fonts,
+            fontSizes: figmaData.designTokens.fontSizes.map(size => `${size}px`),
+            fontWeights: figmaData.designTokens.fontWeights,
+            lineHeights: figmaData.designTokens.lineHeights.map(lh => `${lh}px`)
+          },
+          spacing: {
+            scale: figmaData.designTokens.spacing.map(s => `${s}px`),
+            patterns: {}
+          },
+          borderRadius: {
+            values: figmaData.designTokens.borderRadius.map((r, i) => ({
+              name: `radius-${i + 1}`,
+              value: `${r}px`
+            }))
+          },
+          shadows: {
+            levels: []
+          },
+          source: 'figma-api'
         };
 
-        // Store the actual Figma design tokens
-        figmaDesignTokens = figmaData.designTokens;
-        figmaNodeData = figmaData.nodeData;
+        // Return minimal component library (can be enhanced later)
+        const componentLibrary = {
+          components: [],
+          totalComponents: 0,
+          source: 'figma-api'
+        };
 
-        console.log(`✅ Figma data fetched: screenshot + design tokens`);
+        return res.json({
+          success: true,
+          screenshotsAnalyzed: 0,
+          figmaUrlAnalyzed: true,
+          designTokens,
+          componentLibrary,
+          analysisResults: [],
+          dataSource: 'figma-api',
+          note: 'Design tokens extracted directly from Figma API'
+        });
+
       } catch (figmaError) {
         console.error('Figma processing error:', figmaError);
         return res.status(400).json({
@@ -54,40 +90,24 @@ router.post('/', async (req, res) => {
       }
     }
 
-    // Combine uploaded files and Figma file
-    const allFiles = [...uploadedFiles];
-    if (figmaFile) {
-      allFiles.push(figmaFile);
-    }
-
-    console.log(`📸 Analyzing ${allFiles.length} screenshot(s)...`);
+    // Handle screenshot uploads - use AI vision analysis
+    console.log(`📸 Analyzing ${uploadedFiles.length} screenshot(s) with AI vision...`);
 
     // Analyze each screenshot
     const analysisResults = [];
-    for (const file of allFiles) {
+    for (const file of uploadedFiles) {
       console.log(`🔍 Processing: ${file.originalname}`);
 
       const analysis = await analysisService.analyzeScreenshot(file.path);
       analysisResults.push({
         filename: file.originalname,
         path: file.path,
-        analysis,
-        fromFigma: file.fromFigma || false
+        analysis
       });
     }
 
-    // Clean up Figma temporary file if it exists
-    if (figmaFile) {
-      try {
-        await fs.unlink(figmaFile.path);
-        console.log('🧹 Cleaned up Figma temporary file');
-      } catch (cleanupError) {
-        console.warn('Failed to clean up temporary Figma file:', cleanupError.message);
-      }
-    }
-
-    // Consolidate design tokens from all screenshots
-    console.log('🎨 Extracting design tokens...');
+    // Consolidate design tokens from all screenshots using AI analysis
+    console.log('🎨 Extracting design tokens from AI analysis...');
     const designTokens = await designTokenService.consolidateTokens(analysisResults);
 
     // Generate component library structure
@@ -96,22 +116,17 @@ router.post('/', async (req, res) => {
 
     res.json({
       success: true,
-      screenshotsAnalyzed: allFiles.length,
-      figmaUrlAnalyzed: !!figmaUrl,
+      screenshotsAnalyzed: uploadedFiles.length,
+      figmaUrlAnalyzed: false,
       designTokens,
       componentLibrary,
       analysisResults: analysisResults.map(r => ({
         filename: r.filename,
         components: r.analysis.components,
-        summary: r.analysis.summary,
-        fromFigma: r.fromFigma
+        summary: r.analysis.summary
       })),
-      // Include actual Figma design tokens if available
-      figmaData: figmaDesignTokens ? {
-        designTokens: figmaDesignTokens,
-        source: 'figma-api',
-        note: 'These are the actual design tokens extracted from Figma, not AI-inferred'
-      } : null
+      dataSource: 'ai-vision',
+      note: 'Design tokens inferred from screenshot analysis using Claude Vision API'
     });
 
   } catch (error) {
