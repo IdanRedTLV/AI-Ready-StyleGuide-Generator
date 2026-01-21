@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import './ExportPanel.css';
 
-function ExportPanel({ designTokens, figmaOutput }) {
+function ExportPanel({ designTokens, figmaOutput, aiReadyDocumentation }) {
   const [exportFormat, setExportFormat] = useState('json');
   const [exported, setExported] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -13,6 +13,60 @@ function ExportPanel({ designTokens, figmaOutput }) {
     { id: 'scss', label: 'SCSS', icon: '💎', description: 'Sass variables' },
     { id: 'javascript', label: 'JavaScript', icon: '⚡', description: 'ES6 module export' }
   ];
+
+  const handleDownloadAIContext = (format) => {
+    if (!aiReadyDocumentation) {
+      alert('No AI-ready documentation available');
+      return;
+    }
+
+    let content, filename, mimeType;
+
+    if (format === 'json') {
+      content = JSON.stringify(aiReadyDocumentation, null, 2);
+      filename = 'design-system-ai-context.json';
+      mimeType = 'application/json';
+    } else if (format === 'markdown') {
+      content = convertToMarkdown(aiReadyDocumentation);
+      filename = 'design-system-ai-context.md';
+      mimeType = 'text/markdown';
+    }
+
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const convertToMarkdown = (docs) => {
+    let md = `# ${docs.metadata.name}\n\n`;
+    md += `**Generated:** ${new Date(docs.metadata.generatedAt).toLocaleString()}\n`;
+    md += `**Source:** ${docs.metadata.source.type}\n`;
+    if (docs.metadata.source.figmaUrl) {
+      md += `**Figma URL:** ${docs.metadata.source.figmaUrl}\n`;
+    }
+    md += `\n---\n\n`;
+
+    md += `## 🤖 AI Instructions\n\n`;
+    md += `**Purpose:** ${docs.aiInstructions.purpose}\n\n`;
+    md += `### Critical Rules\n\n`;
+    docs.aiInstructions.criticalRules.forEach(rule => {
+      md += `- ${rule}\n`;
+    });
+    md += `\n---\n\n`;
+
+    md += `## 🎨 Design Tokens\n\n`;
+    md += `\`\`\`json\n${JSON.stringify(docs.tokens, null, 2)}\n\`\`\`\n\n`;
+
+    md += `---\n\n*Use this documentation as context when generating UI code with AI assistants like Claude, GPT-4, or Gemini*\n`;
+
+    return md;
+  };
 
   const handleExport = async () => {
     setLoading(true);
@@ -111,6 +165,66 @@ function ExportPanel({ designTokens, figmaOutput }) {
           <pre className="code-preview">
             <code>{exported}</code>
           </pre>
+        </div>
+      )}
+
+      {aiReadyDocumentation && (
+        <div className="ai-context-section">
+          <h3>🤖 AI-Ready Design System Documentation</h3>
+          <p className="ai-context-description">
+            This documentation teaches AI models (Claude, GPT-4, Gemini) how to use your design system correctly.
+            Copy this as context when generating UI code to ensure pixel-perfect results that follow your design patterns.
+          </p>
+
+          <div className="ai-context-features">
+            <div className="feature-item">
+              <span className="feature-icon">📋</span>
+              <div>
+                <strong>W3C Design Tokens</strong>
+                <p>Industry-standard format with semantic descriptions</p>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">✅</span>
+              <div>
+                <strong>Usage Rules</strong>
+                <p>Do/Don't patterns and common mistakes to avoid</p>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">♿</span>
+              <div>
+                <strong>Accessibility</strong>
+                <p>ARIA roles, keyboard nav, contrast requirements</p>
+              </div>
+            </div>
+            <div className="feature-item">
+              <span className="feature-icon">📱</span>
+              <div>
+                <strong>Responsive Rules</strong>
+                <p>Mobile/tablet/desktop behavior guidelines</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="ai-context-actions">
+            <button
+              className="btn btn-primary"
+              onClick={() => handleDownloadAIContext('json')}
+            >
+              📄 Download JSON (For API)
+            </button>
+            <button
+              className="btn btn-primary"
+              onClick={() => handleDownloadAIContext('markdown')}
+            >
+              📝 Download Markdown (For Context)
+            </button>
+          </div>
+
+          <div className="ai-context-hint">
+            <p>💡 <strong>Pro Tip:</strong> Copy the JSON or Markdown content and paste it as context when asking AI to generate UI code. The AI will follow your design system rules automatically!</p>
+          </div>
         </div>
       )}
 

@@ -90,6 +90,7 @@ function ResultsSection({ results, onReset }) {
           <ExportPanel
             designTokens={results.designTokens}
             figmaOutput={results.figmaOutput}
+            aiReadyDocumentation={results.aiReadyDocumentation}
           />
         )}
       </div>
