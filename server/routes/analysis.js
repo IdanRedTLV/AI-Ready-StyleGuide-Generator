@@ -42,13 +42,20 @@ router.post('/', async (req, res) => {
             }))
           },
           typography: {
-            fontFamilies: figmaData.designTokens.fonts,
+            fontFamilies: figmaData.designTokens.fonts.map((font, i) => ({
+              name: i === 0 ? 'primary' : i === 1 ? 'secondary' : 'monospace',
+              value: font
+            })),
             fontSizes: figmaData.designTokens.fontSizes.map(size => `${size}px`),
             fontWeights: figmaData.designTokens.fontWeights,
             lineHeights: figmaData.designTokens.lineHeights.map(lh => `${lh}px`)
           },
           spacing: {
-            scale: figmaData.designTokens.spacing.map(s => `${s}px`),
+            scale: figmaData.designTokens.spacing.map((s, i) => ({
+              name: `spacing-${i + 1}`,
+              value: `${s}px`,
+              rem: `${(s / 16).toFixed(2)}rem`
+            })),
             patterns: {}
           },
           borderRadius: {
