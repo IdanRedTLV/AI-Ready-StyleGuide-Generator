@@ -3,6 +3,7 @@ const router = express.Router();
 const analysisService = require('../services/analysisService');
 const designTokenService = require('../services/designTokenService');
 const figmaService = require('../services/figmaService');
+const aiDocumentationService = require('../services/aiDocumentationService');
 const fs = require('fs').promises;
 const path = require('path');
 
@@ -77,6 +78,18 @@ router.post('/', async (req, res) => {
           source: 'figma-api'
         };
 
+        // Generate AI-ready documentation
+        console.log('🤖 Generating AI-ready documentation...');
+        const aiReadyDocs = aiDocumentationService.generateAIReadyDocumentation({
+          designTokens,
+          componentLibrary,
+          options: {
+            projectName: 'Figma Design System',
+            sourceType: 'figma',
+            figmaUrl
+          }
+        });
+
         return res.json({
           success: true,
           screenshotsAnalyzed: 0,
@@ -85,7 +98,8 @@ router.post('/', async (req, res) => {
           componentLibrary,
           analysisResults: [],
           dataSource: 'figma-api',
-          note: 'Design tokens extracted directly from Figma API'
+          note: 'Design tokens extracted directly from Figma API',
+          aiReadyDocumentation: aiReadyDocs
         });
 
       } catch (figmaError) {
@@ -121,6 +135,17 @@ router.post('/', async (req, res) => {
     console.log('🧩 Generating component library...');
     const componentLibrary = await analysisService.generateComponentLibrary(analysisResults);
 
+    // Generate AI-ready documentation
+    console.log('🤖 Generating AI-ready documentation...');
+    const aiReadyDocs = aiDocumentationService.generateAIReadyDocumentation({
+      designTokens,
+      componentLibrary,
+      options: {
+        projectName: 'Screenshot-based Design System',
+        sourceType: 'screenshot'
+      }
+    });
+
     res.json({
       success: true,
       screenshotsAnalyzed: uploadedFiles.length,
@@ -133,7 +158,8 @@ router.post('/', async (req, res) => {
         summary: r.analysis.summary
       })),
       dataSource: 'ai-vision',
-      note: 'Design tokens inferred from screenshot analysis using Claude Vision API'
+      note: 'Design tokens inferred from screenshot analysis using Claude Vision API',
+      aiReadyDocumentation: aiReadyDocs
     });
 
   } catch (error) {

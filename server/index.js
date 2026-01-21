@@ -7,6 +7,7 @@ require('dotenv').config();
 
 const analysisRoutes = require('./routes/analysis');
 const figmaRoutes = require('./routes/figma');
+const exportRoutes = require('./routes/export');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -55,6 +56,7 @@ const upload = multer({
 // Routes
 app.use('/api/analysis', upload.array('screenshots', 10), analysisRoutes);
 app.use('/api/figma', figmaRoutes);
+app.use('/api/export', exportRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
