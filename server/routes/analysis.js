@@ -19,29 +19,36 @@ router.post('/', async (req, res) => {
 
     // Handle Figma URL if provided
     let figmaFile = null;
+    let figmaDesignTokens = null;
+    let figmaNodeData = null;
+
     if (figmaUrl) {
       try {
         console.log(`🔗 Processing Figma URL: ${figmaUrl}`);
-        const figmaScreenshot = await figmaService.fetchAndPrepareScreenshot(figmaUrl);
+        const figmaData = await figmaService.fetchCompleteFrameData(figmaUrl);
 
-        // Save to temporary file for analysis
+        // Save screenshot to temporary file for AI analysis
         const tempDir = path.join(__dirname, '../../uploads');
         const tempFileName = `figma-${Date.now()}.png`;
         const tempFilePath = path.join(tempDir, tempFileName);
 
-        await fs.writeFile(tempFilePath, figmaScreenshot.buffer);
+        await fs.writeFile(tempFilePath, figmaData.screenshot.buffer);
 
         figmaFile = {
-          originalname: `figma-frame-${figmaScreenshot.nodeId}.png`,
+          originalname: `figma-frame-${figmaData.nodeId}.png`,
           path: tempFilePath,
           fromFigma: true
         };
 
-        console.log(`✅ Figma screenshot saved: ${tempFileName}`);
+        // Store the actual Figma design tokens
+        figmaDesignTokens = figmaData.designTokens;
+        figmaNodeData = figmaData.nodeData;
+
+        console.log(`✅ Figma data fetched: screenshot + design tokens`);
       } catch (figmaError) {
         console.error('Figma processing error:', figmaError);
         return res.status(400).json({
-          error: 'Failed to fetch Figma screenshot',
+          error: 'Failed to fetch Figma data',
           details: figmaError.message
         });
       }
@@ -98,7 +105,13 @@ router.post('/', async (req, res) => {
         components: r.analysis.components,
         summary: r.analysis.summary,
         fromFigma: r.fromFigma
-      }))
+      })),
+      // Include actual Figma design tokens if available
+      figmaData: figmaDesignTokens ? {
+        designTokens: figmaDesignTokens,
+        source: 'figma-api',
+        note: 'These are the actual design tokens extracted from Figma, not AI-inferred'
+      } : null
     });
 
   } catch (error) {

@@ -172,6 +172,169 @@ class FigmaService {
   }
 
   /**
+   * Fetch actual node data from Figma API
+   * @param {string} fileKey - Figma file key
+   * @param {string} nodeId - Node ID in format "1:2"
+   * @returns {Promise<Object>} Node data with styles, fonts, colors, etc.
+   */
+  async fetchFigmaNodeData(fileKey, nodeId) {
+    if (!this.apiKey) {
+      throw new Error('Figma access token not configured');
+    }
+
+    try {
+      console.log(`📊 Fetching Figma node data for file: ${fileKey}, node: ${nodeId}`);
+
+      const response = await axios.get(
+        `${this.baseURL}/files/${fileKey}/nodes`,
+        {
+          params: {
+            ids: nodeId
+          },
+          headers: {
+            'X-Figma-Token': this.apiKey
+          }
+        }
+      );
+
+      const nodeData = response.data.nodes?.[nodeId];
+
+      if (!nodeData) {
+        console.error('No node data returned from Figma API');
+        return null;
+      }
+
+      console.log(`✅ Figma node data fetched successfully`);
+      return nodeData;
+    } catch (error) {
+      console.error('Error fetching Figma node data:', error.message);
+      if (error.response) {
+        console.error('Figma API error:', error.response.status, error.response.data);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Extract design tokens from Figma node data
+   * @param {Object} nodeData - Node data from Figma API
+   * @returns {Object} Extracted design tokens (colors, fonts, spacing, etc.)
+   */
+  extractDesignTokensFromNode(nodeData) {
+    const tokens = {
+      colors: new Set(),
+      fonts: new Set(),
+      fontSizes: new Set(),
+      fontWeights: new Set(),
+      lineHeights: new Set(),
+      letterSpacings: new Set(),
+      spacing: new Set(),
+      borderRadius: new Set(),
+      opacity: new Set()
+    };
+
+    const traverseNode = (node) => {
+      if (!node) return;
+
+      // Extract fill colors
+      if (node.fills && Array.isArray(node.fills)) {
+        node.fills.forEach(fill => {
+          if (fill.type === 'SOLID' && fill.color) {
+            const color = this.rgbToHex(fill.color);
+            const opacity = fill.opacity !== undefined ? fill.opacity : 1;
+            tokens.colors.add(JSON.stringify({ color, opacity }));
+          }
+        });
+      }
+
+      // Extract stroke colors
+      if (node.strokes && Array.isArray(node.strokes)) {
+        node.strokes.forEach(stroke => {
+          if (stroke.type === 'SOLID' && stroke.color) {
+            const color = this.rgbToHex(stroke.color);
+            const opacity = stroke.opacity !== undefined ? stroke.opacity : 1;
+            tokens.colors.add(JSON.stringify({ color, opacity }));
+          }
+        });
+      }
+
+      // Extract typography
+      if (node.style) {
+        if (node.style.fontFamily) {
+          tokens.fonts.add(node.style.fontFamily);
+        }
+        if (node.style.fontSize) {
+          tokens.fontSizes.add(node.style.fontSize);
+        }
+        if (node.style.fontWeight) {
+          tokens.fontWeights.add(node.style.fontWeight);
+        }
+        if (node.style.lineHeightPx) {
+          tokens.lineHeights.add(node.style.lineHeightPx);
+        }
+        if (node.style.letterSpacing) {
+          tokens.letterSpacings.add(node.style.letterSpacing);
+        }
+      }
+
+      // Extract border radius
+      if (node.cornerRadius !== undefined) {
+        tokens.borderRadius.add(node.cornerRadius);
+      }
+      if (node.rectangleCornerRadii) {
+        node.rectangleCornerRadii.forEach(r => tokens.borderRadius.add(r));
+      }
+
+      // Extract opacity
+      if (node.opacity !== undefined && node.opacity < 1) {
+        tokens.opacity.add(node.opacity);
+      }
+
+      // Extract spacing from layout properties
+      if (node.paddingLeft) tokens.spacing.add(node.paddingLeft);
+      if (node.paddingRight) tokens.spacing.add(node.paddingRight);
+      if (node.paddingTop) tokens.spacing.add(node.paddingTop);
+      if (node.paddingBottom) tokens.spacing.add(node.paddingBottom);
+      if (node.itemSpacing) tokens.spacing.add(node.itemSpacing);
+
+      // Traverse children
+      if (node.children && Array.isArray(node.children)) {
+        node.children.forEach(child => traverseNode(child));
+      }
+    };
+
+    // Start traversal from root node
+    if (nodeData.document) {
+      traverseNode(nodeData.document);
+    }
+
+    // Convert Sets to sorted arrays
+    return {
+      colors: Array.from(tokens.colors).map(s => JSON.parse(s)),
+      fonts: Array.from(tokens.fonts).sort(),
+      fontSizes: Array.from(tokens.fontSizes).sort((a, b) => a - b),
+      fontWeights: Array.from(tokens.fontWeights).sort((a, b) => a - b),
+      lineHeights: Array.from(tokens.lineHeights).sort((a, b) => a - b),
+      letterSpacings: Array.from(tokens.letterSpacings).sort((a, b) => a - b),
+      spacing: Array.from(tokens.spacing).sort((a, b) => a - b),
+      borderRadius: Array.from(tokens.borderRadius).sort((a, b) => a - b),
+      opacity: Array.from(tokens.opacity).sort((a, b) => a - b)
+    };
+  }
+
+  /**
+   * Convert Figma RGB object to hex color
+   * @param {Object} rgb - {r, g, b} with values 0-1
+   * @returns {string} Hex color string
+   */
+  rgbToHex(rgb) {
+    const r = Math.round(rgb.r * 255);
+    const g = Math.round(rgb.g * 255);
+    const b = Math.round(rgb.b * 255);
+    return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+  }
+
+  /**
    * Fetch and prepare Figma screenshot for analysis
    * @param {string} figmaUrl - Full Figma URL
    * @returns {Promise<{buffer: Buffer, mimeType: string, nodeId: string}>}
@@ -200,6 +363,52 @@ class FigmaService {
       buffer: compressed.buffer,
       mimeType: compressed.mimeType,
       nodeId: parsed.nodeId
+    };
+  }
+
+  /**
+   * Fetch complete Figma frame data (screenshot + design tokens)
+   * @param {string} figmaUrl - Full Figma URL
+   * @returns {Promise<{screenshot: Object, designTokens: Object, nodeId: string, fileKey: string}>}
+   */
+  async fetchCompleteFrameData(figmaUrl) {
+    const parsed = this.parseFigmaUrl(figmaUrl);
+
+    if (!parsed.isValid) {
+      throw new Error('Invalid Figma URL');
+    }
+
+    if (!parsed.nodeId) {
+      throw new Error('Figma URL must include a node-id parameter (e.g., ?node-id=1-2)');
+    }
+
+    console.log(`🎯 Fetching complete Figma frame data...`);
+
+    // Fetch both screenshot and node data in parallel
+    const [screenshot, nodeData] = await Promise.all([
+      this.fetchFigmaScreenshot(parsed.fileKey, parsed.nodeId),
+      this.fetchFigmaNodeData(parsed.fileKey, parsed.nodeId)
+    ]);
+
+    if (!screenshot) {
+      throw new Error('Failed to fetch screenshot from Figma');
+    }
+
+    // Compress screenshot if needed
+    const compressed = await this.compressImage(screenshot.image, screenshot.mimeType);
+
+    // Extract design tokens from node data
+    const designTokens = nodeData ? this.extractDesignTokensFromNode(nodeData) : null;
+
+    return {
+      screenshot: {
+        buffer: compressed.buffer,
+        mimeType: compressed.mimeType
+      },
+      designTokens,
+      nodeData,
+      nodeId: parsed.nodeId,
+      fileKey: parsed.fileKey
     };
   }
 
